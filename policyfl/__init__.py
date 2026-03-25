@@ -4,6 +4,8 @@ from policyfl.models import ConsentRecord, PolicyDecision, Purpose
 from policyfl.consent_store import ConsentStore, JSONConsentStore
 from policyfl.policy_engine import PolicyEngine, SimpleEngine
 from policyfl.mod import make_policyfl_mod
+from policyfl.audit import AuditEntry, AuditLogger, JSONAuditLogger
+from policyfl.api import create_app
 
 __all__ = [
     "ConsentRecord",
@@ -14,4 +16,8 @@ __all__ = [
     "PolicyEngine",
     "SimpleEngine",
     "make_policyfl_mod",
+    "AuditEntry",
+    "AuditLogger",
+    "JSONAuditLogger",
+    "create_app",
 ]

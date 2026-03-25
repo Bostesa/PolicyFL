@@ -7,6 +7,7 @@ from typing import Callable
 
 from flwr.common import Context, Message, RecordDict
 
+from policyfl.audit import AuditEntry, AuditLogger
 from policyfl.policy_engine import PolicyEngine
 
 logger = logging.getLogger("policyfl")
@@ -18,6 +19,7 @@ ClientAppCallable = Callable[[Message, Context], Message]
 def make_policyfl_mod(
     engine: PolicyEngine,
     *,
+    audit_logger: AuditLogger | None = None,
     purpose_key: str = "purpose",
     device_id_key: str = "device_id",
 ) -> Callable[[Message, Context, ClientAppCallable], Message]:
@@ -27,6 +29,8 @@ def make_policyfl_mod(
     ----------
     engine : PolicyEngine
         The policy engine to use for consent checks.
+    audit_logger : AuditLogger | None
+        Optional audit logger to record every policy decision.
     purpose_key : str
         Key in run_config or message config_records that holds the training purpose.
     device_id_key : str
@@ -54,14 +58,36 @@ def make_policyfl_mod(
                     break
 
         if not purpose:
-            logger.warning(
-                "DENY device=%s — no purpose specified in run_config or message",
-                device_id,
-            )
+            reason = "no purpose specified in run_config or message"
+            logger.warning("DENY device=%s — %s", device_id, reason)
+            if audit_logger is not None:
+                audit_logger.log(
+                    AuditEntry.from_decision(
+                        device_id=device_id,
+                        purpose="",
+                        allowed=False,
+                        reason=reason,
+                        subject_ids=[],
+                        round_id=str(context.run_id),
+                    )
+                )
             return Message(RecordDict(), reply_to=msg)
 
         # --- Evaluate policy ---
         decision = engine.evaluate(device_id=device_id, purpose=str(purpose))
+
+        # --- Audit log ---
+        if audit_logger is not None:
+            audit_logger.log(
+                AuditEntry.from_decision(
+                    device_id=device_id,
+                    purpose=str(purpose),
+                    allowed=decision.allowed,
+                    reason=decision.reason,
+                    subject_ids=decision.subject_ids,
+                    round_id=str(context.run_id),
+                )
+            )
 
         if decision.allowed:
             return call_next(msg, context)

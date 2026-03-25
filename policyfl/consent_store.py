@@ -24,6 +24,16 @@ class ConsentStore(ABC):
         ...
 
     @abstractmethod
+    def grant_consent(self, record: ConsentRecord) -> None:
+        """Add a new consent record."""
+        ...
+
+    @abstractmethod
+    def get_consent_status(self, subject_id: str) -> list[ConsentRecord]:
+        """Return all consent records for a given subject."""
+        ...
+
+    @abstractmethod
     def revoke_consent(self, subject_id: str, purpose: str | None = None) -> None:
         """Revoke consent for a subject, optionally limited to a specific purpose."""
         ...
@@ -79,6 +89,13 @@ class JSONConsentStore(ConsentStore):
                 }
             )
         self._path.write_text(json.dumps({"consents": records}, indent=2))
+
+    def grant_consent(self, record: ConsentRecord) -> None:
+        self._consents.append(record)
+        self._save()
+
+    def get_consent_status(self, subject_id: str) -> list[ConsentRecord]:
+        return [c for c in self._consents if c.subject_id == subject_id]
 
     def get_consents_for_device(self, device_id: str) -> list[ConsentRecord]:
         return [c for c in self._consents if device_id in c.device_ids]
