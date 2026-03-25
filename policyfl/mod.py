@@ -8,6 +8,7 @@ from typing import Callable
 from flwr.common import Context, Message, RecordDict
 
 from policyfl.audit import AuditEntry, AuditLogger
+from policyfl.minimizer import DataMinimizer
 from policyfl.policy_engine import PolicyEngine
 
 logger = logging.getLogger("policyfl")
@@ -20,6 +21,7 @@ def make_policyfl_mod(
     engine: PolicyEngine,
     *,
     audit_logger: AuditLogger | None = None,
+    minimizer: DataMinimizer | None = None,
     purpose_key: str = "purpose",
     device_id_key: str = "device_id",
 ) -> Callable[[Message, Context, ClientAppCallable], Message]:
@@ -31,6 +33,10 @@ def make_policyfl_mod(
         The policy engine to use for consent checks.
     audit_logger : AuditLogger | None
         Optional audit logger to record every policy decision.
+    minimizer : DataMinimizer | None
+        Optional data minimizer for GDPR Article 5(1)(c) feature filtering.
+        When provided, disallowed features are stripped from the message
+        before training proceeds.
     purpose_key : str
         Key in run_config or message config_records that holds the training purpose.
     device_id_key : str
@@ -90,6 +96,17 @@ def make_policyfl_mod(
             )
 
         if decision.allowed:
+            # --- Data minimization (GDPR Art. 5(1)(c)) ---
+            if minimizer is not None and msg.has_content():
+                result = minimizer.filter_record_dict(str(purpose), msg.content)
+                if result.removed:
+                    logger.info(
+                        "MINIMIZED device=%s purpose=%s: stripped %s, kept %s",
+                        device_id,
+                        purpose,
+                        result.removed,
+                        result.kept,
+                    )
             return call_next(msg, context)
 
         # Denied — return empty reply without training

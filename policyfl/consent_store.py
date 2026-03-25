@@ -38,6 +38,16 @@ class ConsentStore(ABC):
         """Revoke consent for a subject, optionally limited to a specific purpose."""
         ...
 
+    @abstractmethod
+    def revoke_for_devices(self, subject_id: str, device_ids: list[str]) -> None:
+        """Revoke consent records for a subject that cover any of the given devices."""
+        ...
+
+    @abstractmethod
+    def reactivate_for_devices(self, subject_id: str, device_ids: list[str]) -> None:
+        """Reactivate revoked consent records for a subject that cover any of the given devices."""
+        ...
+
 
 class JSONConsentStore(ConsentStore):
     """File-based consent store backed by a JSON file."""
@@ -141,4 +151,27 @@ class JSONConsentStore(ConsentStore):
             if purpose is None or purpose in consent.purposes:
                 consent.revoked = True
                 consent.revoked_at = now
+        self._save()
+
+    def revoke_for_devices(self, subject_id: str, device_ids: list[str]) -> None:
+        now = datetime.now(timezone.utc)
+        device_set = set(device_ids)
+        for consent in self._consents:
+            if consent.subject_id != subject_id:
+                continue
+            if device_set.intersection(consent.device_ids):
+                consent.revoked = True
+                consent.revoked_at = now
+        self._save()
+
+    def reactivate_for_devices(self, subject_id: str, device_ids: list[str]) -> None:
+        device_set = set(device_ids)
+        for consent in self._consents:
+            if consent.subject_id != subject_id:
+                continue
+            if not consent.revoked:
+                continue
+            if device_set.intersection(consent.device_ids):
+                consent.revoked = False
+                consent.revoked_at = None
         self._save()
